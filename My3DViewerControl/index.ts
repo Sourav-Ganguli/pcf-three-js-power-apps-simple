@@ -10,6 +10,17 @@ export class My3DViewerControl implements ComponentFramework.StandardControl<IIn
     private _raycaster: THREE.Raycaster;
     private _mouse: THREE.Vector2;
     private _intersected: THREE.Object3D | null = null;
+    
+    // Mouse interaction properties for rotation
+    private _isMouseDown: boolean = false;
+    private _mouseX: number = 0;
+    private _mouseY: number = 0;
+    private _targetRotationX: number = 0;
+    private _targetRotationY: number = 0;
+    private _targetRotationOnMouseDownX: number = 0;
+    private _targetRotationOnMouseDownY: number = 0;
+    private _mouseXOnMouseDown: number = 0;
+    private _mouseYOnMouseDown: number = 0;
 
     constructor() {
         // nothing here
@@ -70,22 +81,60 @@ export class My3DViewerControl implements ComponentFramework.StandardControl<IIn
         this._raycaster = new THREE.Raycaster();
         this._mouse = new THREE.Vector2();
 
-        // Add event listener for mouse click
+        // Add event listeners for mouse interaction
+        container.addEventListener('mousedown', this.onMouseDown.bind(this), false);
+        container.addEventListener('mouseup', this.onMouseUp.bind(this), false);
+        container.addEventListener('mousemove', this.onMouseMove.bind(this), false);
         container.addEventListener('click', this.onMouseClick.bind(this), false);
 
-        // Render the scene
+        // Render the scene with static animation loop for smooth rotation interpolation
         const animate = () => {
             requestAnimationFrame(animate);
-            this._cube.rotation.x += 0.01;
-            this._cube.rotation.y += 0.01;
+            
+            // Smooth rotation interpolation
+            this._cube.rotation.x += (this._targetRotationX - this._cube.rotation.x) * 0.05;
+            this._cube.rotation.y += (this._targetRotationY - this._cube.rotation.y) * 0.05;
+            
             this._renderer.render(this._scene, this._camera);
         };
         animate();
     }
 
+    // Mouse event handlers for rotation control
+    private onMouseDown(event: MouseEvent): void {
+        event.preventDefault();
+        this._isMouseDown = true;
+        this._mouseXOnMouseDown = event.clientX;
+        this._mouseYOnMouseDown = event.clientY;
+        this._targetRotationOnMouseDownX = this._targetRotationX;
+        this._targetRotationOnMouseDownY = this._targetRotationY;
+    }
+
+    private onMouseUp(event: MouseEvent): void {
+        event.preventDefault();
+        this._isMouseDown = false;
+    }
+
+    private onMouseMove(event: MouseEvent): void {
+        event.preventDefault();
+        
+        if (this._isMouseDown) {
+            this._mouseX = event.clientX;
+            this._mouseY = event.clientY;
+            
+            // Calculate rotation based on mouse movement
+            this._targetRotationY = this._targetRotationOnMouseDownY + (this._mouseX - this._mouseXOnMouseDown) * 0.02;
+            this._targetRotationX = this._targetRotationOnMouseDownX + (this._mouseY - this._mouseYOnMouseDown) * 0.02;
+        }
+    }
+
     
     // Change color on mouse click to check the 3D scene is interactable.
     private onMouseClick(event: MouseEvent): void {
+        // Calculate mouse position in normalized device coordinates (-1 to +1)
+        const rect = this._container.getBoundingClientRect();
+        this._mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this._mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
         
         // Update the raycaster with the mouse position and the camera
         this._raycaster.setFromCamera(this._mouse, this._camera);
@@ -127,7 +176,19 @@ export class My3DViewerControl implements ComponentFramework.StandardControl<IIn
     }
 
     public destroy(): void {
-        // Cleanup
+        // Remove event listeners
+        this._container.removeEventListener('mousedown', this.onMouseDown.bind(this), false);
+        this._container.removeEventListener('mouseup', this.onMouseUp.bind(this), false);
+        this._container.removeEventListener('mousemove', this.onMouseMove.bind(this), false);
+        this._container.removeEventListener('click', this.onMouseClick.bind(this), false);
+        
+        // Cleanup Three.js resources
         this._renderer.dispose();
+        
+        // Dispose geometry and materials
+        this._cube.geometry.dispose();
+        if (this._cube.material instanceof THREE.Material) {
+            this._cube.material.dispose();
+        }
     }
 }
