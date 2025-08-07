@@ -36,6 +36,31 @@ export class My3DViewerControl implements ComponentFramework.StandardControl<IIn
         animate();
     }
 
+    // Parse GeoJSON polygon (always closed 2D polygon)
+    private parseGeoJSON(geoJsonString: string): THREE.Vector2[] | null {
+        try {
+            const geoJson = JSON.parse(geoJsonString);
+            
+            if (geoJson.type === 'Polygon' && geoJson.coordinates && geoJson.coordinates.length > 0) {
+                // Get the outer ring (first array in coordinates)
+                const outerRing = geoJson.coordinates[0];
+                
+                // Convert coordinates to Vector2 array for Three.js Shape
+                // Remove the last point since GeoJSON polygons are closed (first == last)
+                const points: THREE.Vector2[] = outerRing.slice(0, -1).map((coord: number[]) => {
+                    return new THREE.Vector2(coord[0], coord[1]);
+                });
+                
+                return points.length >= 3 ? points : null; // Need at least 3 points for a valid polygon
+            }
+        } catch (error) {
+            console.error('Error parsing GeoJSON:', error);
+        }
+        
+        return null;
+    }
+
+
     // Create cubes for each table row
     private createCubes(tableData: ComponentFramework.PropertyTypes.DataSet): void {
         // Clear existing cubes
@@ -58,9 +83,31 @@ export class My3DViewerControl implements ComponentFramework.StandardControl<IIn
         tableData.sortedRecordIds.forEach((recordId, index) => {
             const record = tableData.records[recordId];
             const colorHex = record.getFormattedValue('Color Hex') || '#FF5733'; // fallback to first color if no color
+            const geoJsonString = record.getFormattedValue('Geometry');
+
+            const points = this.parseGeoJSON(geoJsonString);
+
+               // Add null check before creating the shape
+            if (!points || points.length < 3) {
+                console.warn('Invalid or insufficient points for polygon, skipping shape creation');
+                return; // Skip this iteration if no valid points
+            }
+
+            const shape = new THREE.Shape(points);
+
+            // Create extruded geometry with consistent settings for 2D polygons
+            const extrudeSettings = {
+                        depth: 1.5, // Extrusion depth
+                        bevelEnabled: true,
+                        bevelThickness: 0.1,
+                        bevelSize: 0.1,
+                        bevelSegments: 2
+                    };
             
+            const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
             const cube = new THREE.Mesh(
-            new THREE.BoxGeometry(2, 2, 2),
+            geometry,
             new THREE.MeshBasicMaterial({ color: new THREE.Color(colorHex) })
             );
             
