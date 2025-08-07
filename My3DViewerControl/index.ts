@@ -7,88 +7,96 @@ export class My3DViewerControl implements ComponentFramework.StandardControl<IIn
     private _renderer: THREE.WebGLRenderer;
     private _scene: THREE.Scene;
     private _camera: THREE.PerspectiveCamera;
-    private _cube: THREE.Mesh;
     private _controls: OrbitControls;
+    private _cubes: THREE.Mesh[] = [];
 
     constructor() {
         // nothing here
     }
 
-    public init(
-        context: ComponentFramework.Context<IInputs>, 
-        notifyOutputChanged: () => void, 
-        state: ComponentFramework.Dictionary, 
-        container: HTMLDivElement
-    ): void {
+    public init(context: ComponentFramework.Context<IInputs>, notifyOutputChanged: () => void, state: ComponentFramework.Dictionary, container: HTMLDivElement): void {
         this._container = container;
-
-        // Track window size - important for code inside updateView.
         context.mode.trackContainerResize(true);
 
-        // Initialize Three.js renderer
         this._renderer = new THREE.WebGLRenderer({ antialias: true });
-        this._renderer.setClearColor(0xffffff); // Set background color to white
+        this._renderer.setClearColor(0xffffff);
         container.appendChild(this._renderer.domElement);
 
-        // Create a scene
         this._scene = new THREE.Scene();
-
-        // Add a camera
         this._camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-        this._camera.position.z = 2;
+        this._camera.position.z = 5;
 
-        // Create a simple cube with basic material
-        const geometry = new THREE.BoxGeometry();
-        const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-        this._cube = new THREE.Mesh(geometry, material);
-        this._scene.add(this._cube);
-
-        // Initialize OrbitControls
         this._controls = new OrbitControls(this._camera, this._renderer.domElement);
-        this._controls.enableDamping = true; // Enable smooth damping
-        this._controls.dampingFactor = 0.05; // Damping factor
-        this._controls.enableZoom = true; // Enable zoom
-        this._controls.enableRotate = true; // Enable rotation
-        this._controls.enablePan = true; // Enable panning
 
-        // Start animation loop
         const animate = () => {
             requestAnimationFrame(animate);
-            
-            // Update controls
             this._controls.update();
-            
-            // Render the scene
             this._renderer.render(this._scene, this._camera);
         };
         animate();
     }
 
+    // Create cubes for each table row
+    private createCubes(tableData: ComponentFramework.PropertyTypes.DataSet): void {
+        // Clear existing cubes
+        this._cubes.forEach(cube => {
+            this._scene.remove(cube);
+            cube.geometry.dispose();
+            if (cube.material instanceof THREE.Material) {
+                cube.material.dispose();
+            }
+        });
+        this._cubes = [];
+
+        if (!tableData || !tableData.sortedRecordIds) {
+            return;
+        }
+
+        // Create cubes for each row
+        const gridSize = Math.ceil(Math.sqrt(tableData.sortedRecordIds.length));
+        
+        tableData.sortedRecordIds.forEach((recordId, index) => {
+            const record = tableData.records[recordId];
+            const colorHex = record.getFormattedValue('Color Hex') || '#FF5733'; // fallback to first color if no color
+            
+            const cube = new THREE.Mesh(
+            new THREE.BoxGeometry(2, 2, 2),
+            new THREE.MeshBasicMaterial({ color: new THREE.Color(colorHex) })
+            );
+            
+            // Simple grid positioning - center the grid
+            const row = Math.floor(index / gridSize);
+            const col = index % gridSize;
+            const offsetX = (gridSize - 1) * 1.5; // Center the grid
+            const offsetZ = (gridSize - 1) * 1.5;
+            cube.position.set(col * 3 - offsetX, 0, row * 3 - offsetZ);
+            
+            this._scene.add(cube);
+            this._cubes.push(cube);
+        });
+
+        // Adjust camera position to view all cubes
+        const distance = Math.max(gridSize * 3, 10);
+        this._camera.position.set(distance, distance * 0.5, distance);
+        this._camera.lookAt(0, 0, 0);
+        this._controls.update();
+    }
+
     public updateView(context: ComponentFramework.Context<IInputs>): void {
-        // Change the render size depending on the parent container (the container that is inside the Canvas App)
         const width = context.mode.allocatedWidth;
         const height = context.mode.allocatedHeight;
 
         this._renderer.setSize(width, height);
         this._camera.aspect = width / height;
         this._camera.updateProjectionMatrix();
-        
-        // Update controls after camera changes
         this._controls.update();
 
-        // Handle table data input
+        // Create cubes from table data
         const tableData = context.parameters.tableData;
-        if (tableData && tableData.columns) {
-            // You can access table data here
-            console.log("Table columns:", Object.keys(tableData.columns));
-            if (tableData.sortedRecordIds && tableData.sortedRecordIds.length > 0) {
-                console.log("Table has", tableData.sortedRecordIds.length, "rows");
-                
-                // Example: Access first row data
-                const firstRecordId = tableData.sortedRecordIds[0];
-                const record = tableData.records[firstRecordId];
-                console.log("First record:", record);
-            }
+        
+        if (tableData && tableData.sortedRecordIds) {
+            // Always recreate cubes when data changes
+            this.createCubes(tableData);
         }
     }
 
@@ -97,16 +105,14 @@ export class My3DViewerControl implements ComponentFramework.StandardControl<IIn
     }
 
     public destroy(): void {
-        // Dispose controls
         this._controls.dispose();
-        
-        // Cleanup Three.js resources
+        this._cubes.forEach(cube => {
+            this._scene.remove(cube);
+            cube.geometry.dispose();
+            if (cube.material instanceof THREE.Material) {
+                cube.material.dispose();
+            }
+        });
         this._renderer.dispose();
-        
-        // Dispose geometry and materials
-        this._cube.geometry.dispose();
-        if (this._cube.material instanceof THREE.Material) {
-            this._cube.material.dispose();
-        }
     }
 }
