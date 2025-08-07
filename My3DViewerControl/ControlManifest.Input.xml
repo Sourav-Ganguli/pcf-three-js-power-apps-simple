@@ -17,9 +17,13 @@
       <domain></domain>
       -->
     </external-service-usage>
-    <!-- property node identifies a specific, configurable piece of data that the control expects from CDS -->
-    <property name="sampleProperty" display-name-key="Property_Display_Key" description-key="Property_Desc_Key" of-type="SingleLine.Text" usage="bound" required="true" />
-    <property name="modelUrl" display-name-key="modelUrl_Display_Key" description-key="modelUrl_Desc_Key" of-type="SingleLine.Text" usage="bound" required="false" />
+    <!-- data-set node represents a set of entity records on CDS; allow more than one data-set -->
+    <data-set name="tableData" display-name-key="TableData_Display_Key" cds-data-set-options="displayCommandBar:true;displayViewSelector:true;displayQuickFind:true">
+      <!-- 'property-set' node represents a unique, configurable property that each record in the data-set must provide. -->
+      <!-- UNCOMMENT TO ADD PROPERTY-SET NODES AND CUSTOMIZE THE DATASET COLUMNS
+      <property-set name="samplePropertySet" display-name-key="Property_Display_Key" description-key="Property_Desc_Key" of-type="SingleLine.Text" usage="bound" required="true"/>
+      -->
+    </data-set>
     <!--
       Property node's of-type attribute can be of-type-group attribute.
       Example:
